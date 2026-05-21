@@ -1,0 +1,17 @@
+[project]
+name = "dialect-video-annotator-backend"
+version = "0.1.0"
+description = "Backend API for the Dialect Video Annotator"
+requires-python = ">=3.12"
+dependencies = [
+  "alembic==1.16.4",
+  "fastapi==0.116.1",
+  "psycopg[binary]==3.2.13",
+  "pydantic-settings==2.10.1",
+  "python-multipart==0.0.20",
+  "sqlalchemy==2.0.43",
+  "uvicorn[standard]==0.35.0",
+]
+
+[tool.uv]
+package = false

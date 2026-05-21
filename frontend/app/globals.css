@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-[#f6f8fb] text-ink antialiased;
+}
+
+a {
+  @apply text-inherit no-underline;
+}
+
+button:disabled {
+  @apply cursor-not-allowed opacity-60;
+}
+
+input:not([type="checkbox"]),
+select,
+textarea {
+  @apply w-full rounded-xl border border-line bg-white px-3 py-2 text-sm text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20;
+}
+
+input[type="checkbox"] {
+  @apply h-4 w-4 rounded border border-line;
+}
+
+table {
+  @apply w-full border-collapse;
+}
+
+th {
+  @apply bg-mist text-left text-xs font-semibold uppercase tracking-[0.12em] text-slate-500;
+}
+
+th,
+td {
+  @apply border-b border-line px-3 py-3 align-top text-sm;
+}

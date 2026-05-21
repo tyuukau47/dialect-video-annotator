@@ -1,0 +1,10 @@
+.DS_Store
+.next
+.venv
+__pycache__
+*.pyc
+node_modules
+backend/.env
+frontend/.env.local
+backend/dialect_video_annotator.db
+
