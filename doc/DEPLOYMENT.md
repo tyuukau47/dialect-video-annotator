@@ -9,9 +9,8 @@ This project is split into two deployable services:
 
 Recommended production topology:
 
-- Frontend deployed separately on Vercel or as a container
-- Backend deployed as a container on Cloud Run, Fly.io, Railway, or Render
-- Managed PostgreSQL database
+- Frontend and backend behind Nginx on one host, or deployed separately behind a reverse proxy
+- Managed PostgreSQL database when possible
 
 For local development, the project also supports SQLite for the backend.
 
@@ -20,8 +19,11 @@ For local development, the project also supports SQLite for the backend.
 ### Frontend
 
 - Deploy `frontend/` as a standalone Next.js app
-- Set `NEXT_PUBLIC_API_BASE_URL` to the backend API URL, for example:
-  - `https://api.example.com/api`
+- Prefer calling the backend through the same origin with `/api`
+- When using the bundled Nginx setup, set:
+  - `NEXT_PUBLIC_API_BASE_URL=/api`
+- For local non-Docker development, keep:
+  - `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api`
 
 ### Backend
 
@@ -65,7 +67,7 @@ npm run dev
 
 ## Docker Compose
 
-The repository includes `docker-compose.yml` for a more production-like local stack.
+The repository includes `docker-compose.yml` for a reverse-proxied container stack.
 
 ```bash
 docker compose up --build
@@ -73,9 +75,10 @@ docker compose up --build
 
 Services:
 
-- PostgreSQL
-- FastAPI backend
-- Next.js frontend
+- Nginx on port `80`
+- FastAPI backend on the internal Docker network
+- Next.js frontend on the internal Docker network
+- PostgreSQL on the internal Docker network
 
 ## Environment Variables
 
@@ -95,6 +98,12 @@ DVA_DEBUG=false
 
 ```text
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api
+```
+
+For the Docker Compose stack, the environment is injected by `docker-compose.yml` as:
+
+```text
+NEXT_PUBLIC_API_BASE_URL=/api
 ```
 
 ## Operational Recommendations
@@ -150,13 +159,14 @@ Options:
    - `python -m app.db.seed`
 4. Verify seeded vocabularies appear on first boot.
 5. Deploy frontend with the correct API base URL.
-4. Run smoke tests:
+   - with the bundled Nginx setup: `/api`
+6. Run smoke tests:
    - resolve a YouTube URL
    - create a voice
    - create a range
    - update a range
    - open admin voice detail
-6. Load-test normal annotation flows with roughly 15 concurrent users.
+7. Load-test normal annotation flows with roughly 15 concurrent users.
 
 ## Gaps to Address Before a Larger Production Launch
 

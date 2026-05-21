@@ -51,9 +51,20 @@ docker compose up --build
 
 This starts:
 
-- PostgreSQL on `5432`
-- FastAPI on `8000`
-- Next.js on `3000`
+- Nginx on `80`
+- Next.js frontend on the internal Docker network
+- FastAPI backend on the internal Docker network
+- PostgreSQL on the internal Docker network
+
+Open:
+
+- App: `http://localhost`
+
+Notes:
+
+- The Docker Compose stack injects `NEXT_PUBLIC_API_BASE_URL=/api` automatically through Nginx.
+- The `frontend/.env.example` file remains pointed at `http://localhost:8000/api` for non-Docker local development.
+- For local API checks from the host, use the backend dev workflow above instead of Docker Compose.
 
 ## Database Workflow
 
