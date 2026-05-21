@@ -738,14 +738,10 @@ def delete_vocabulary_entry(vocab_type: str, entry_id: str, db: Session = Depend
             )
         ) or 0
     if usage_count:
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "error": "VOCABULARY_ENTRY_IN_USE",
-                "message": "This vocabulary entry cannot be deleted because it is currently in use.",
-                "usage_count": usage_count,
-            },
-        )
+        entry.is_active = False
+        db.add(entry)
+        db.commit()
+        return MessageResponse(message="Vocabulary entry is in use and has been set to inactive.")
     db.delete(entry)
     db.commit()
     return MessageResponse(message="Vocabulary entry deleted.")

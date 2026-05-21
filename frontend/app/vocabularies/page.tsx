@@ -51,11 +51,11 @@ export default function VocabulariesPage() {
 
   const deleteMutation = useMutation({
     mutationFn: () => api.deleteVocabulary(tab, selectedId!),
-    onSuccess: async () => {
+    onSuccess: async (response) => {
       setSelectedId(null);
       setValue("");
       setIsActive(true);
-      setBanner("Vocabulary deleted.");
+      setBanner(response.message);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["vocabulary", tab] }),
         queryClient.invalidateQueries({ queryKey: ["vocabulary-page", tab] }),
