@@ -51,7 +51,7 @@ export const api = {
     request<{ message: string }>(`/videos/${videoId}`, {
       method: "DELETE",
     }),
-  getVideoRanges: (videoId: string) => request<Paginated<AnnotationRange>>(`/videos/${videoId}/ranges`),
+  getVideoRanges: (videoId: string, query = "") => request<Paginated<AnnotationRange>>(`/videos/${videoId}/ranges${query}`),
   createRange: (videoId: string, payload: Record<string, unknown>) =>
     request<AnnotationRange>(`/videos/${videoId}/ranges`, {
       method: "POST",
@@ -69,6 +69,7 @@ export const api = {
   listVoices: (query = "") => request<Paginated<Voice>>(`/voices${query}`),
   getVoice: (voiceId: string) => request<Voice>(`/voices/${voiceId}`),
   getVoiceRanges: (voiceId: string, query = "") => request<Paginated<AnnotationRange>>(`/voices/${voiceId}/ranges${query}`),
+  getVoiceVideos: (voiceId: string, query = "") => request<Paginated<VideoSummary>>(`/voices/${voiceId}/videos${query}`),
   createVoice: (payload: Record<string, unknown>) =>
     request<Voice>("/voices", {
       method: "POST",
@@ -84,6 +85,8 @@ export const api = {
       method: "DELETE",
     }),
   listVocabulary: (type: "gender" | "emotion") => request<VocabularyEntry[]>(`/vocabularies/${type}/entries`),
+  listVocabularyPage: (type: "gender" | "emotion", query = "") =>
+    request<Paginated<VocabularyEntry>>(`/vocabularies/${type}/entries/paged${query}`),
   createVocabulary: (type: "gender" | "emotion", payload: Record<string, unknown>) =>
     request<VocabularyEntry>(`/vocabularies/${type}/entries`, {
       method: "POST",

@@ -190,6 +190,47 @@ def list_videos(
     return result
 
 
+@router.get("/voices/{voice_id}/videos", response_model=dict)
+def get_voice_videos(
+    voice_id: str,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=settings.default_page_size, ge=1, le=settings.max_page_size, alias="pageSize"),
+    db: Session = Depends(get_db),
+):
+    _get_voice_or_404(db, voice_id)
+    duration_expr = AnnotationRange.end_ms - AnnotationRange.start_ms
+    statement = (
+        select(
+            Video,
+            func.count(AnnotationRange.id).label("range_count"),
+            func.coalesce(func.sum(duration_expr), 0).label("total_duration_ms"),
+        )
+        .join(
+            AnnotationRange,
+            (AnnotationRange.video_id == Video.id)
+            & (AnnotationRange.voice_id == voice_id)
+            & (AnnotationRange.deleted_at.is_(None)),
+        )
+        .group_by(Video.id)
+        .order_by(func.max(AnnotationRange.created_at).desc())
+    )
+    result = paginate(db, statement, page, page_size)
+    result["items"] = [
+        VideoSummaryResponse(
+            id=video.id,
+            created_at=video.created_at,
+            updated_at=video.updated_at,
+            youtube_video_id=video.youtube_video_id,
+            source_url=video.source_url,
+            title=video.title,
+            range_count=int(range_count or 0),
+            total_duration_ms=int(total_duration_ms or 0),
+        ).model_dump(by_alias=True)
+        for video, range_count, total_duration_ms in result["items"]
+    ]
+    return result
+
+
 @router.get("/videos/{video_id}", response_model=VideoResponse)
 def get_video(video_id: str, db: Session = Depends(get_db)):
     return _get_video_or_404(db, video_id)
@@ -461,6 +502,7 @@ def get_voice_ranges(
     voice_id: str,
     has_transcription: bool | None = Query(default=None, alias="hasTranscription"),
     emotion_id: str | None = Query(default=None, alias="emotionId"),
+    video_id: str | None = Query(default=None, alias="videoId"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=settings.default_page_size, ge=1, le=settings.max_page_size, alias="pageSize"),
     db: Session = Depends(get_db),
@@ -476,6 +518,8 @@ def get_voice_ranges(
         )
         .order_by(AnnotationRange.start_ms.asc())
     )
+    if video_id:
+        statement = statement.where(AnnotationRange.video_id == video_id)
     if emotion_id:
         statement = statement.where(AnnotationRange.emotion_vocab_id == emotion_id)
     if has_transcription is True:
@@ -571,6 +615,49 @@ def list_vocabulary_entries(vocab_type: str, db: Session = Depends(get_db)):
         )
         for entry in entries
     ]
+
+
+@router.get("/vocabularies/{vocab_type}/entries/paged", response_model=dict)
+def list_vocabulary_entries_paged(
+    vocab_type: str,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=settings.default_page_size, ge=1, le=settings.max_page_size, alias="pageSize"),
+    db: Session = Depends(get_db),
+):
+    if vocab_type not in {"gender", "emotion"}:
+        raise HTTPException(status_code=404, detail="Vocabulary type not found")
+
+    statement = (
+        select(VocabularyEntry)
+        .where(VocabularyEntry.type == vocab_type)
+        .order_by(VocabularyEntry.is_active.desc(), VocabularyEntry.value.asc())
+    )
+    result = paginate(db, statement, page, page_size)
+
+    if vocab_type == "gender":
+        usage_map = dict(db.execute(select(Voice.gender_vocab_id, func.count(Voice.id)).group_by(Voice.gender_vocab_id)).all())
+    else:
+        usage_map = dict(
+            db.execute(
+                select(AnnotationRange.emotion_vocab_id, func.count(AnnotationRange.id))
+                .where(AnnotationRange.deleted_at.is_(None))
+                .group_by(AnnotationRange.emotion_vocab_id)
+            ).all()
+        )
+
+    result["items"] = [
+        VocabularyEntryResponse(
+            id=entry.id,
+            created_at=entry.created_at,
+            updated_at=entry.updated_at,
+            type=entry.type,
+            value=entry.value,
+            is_active=entry.is_active,
+            usage_count=int(usage_map.get(entry.id) or 0),
+        ).model_dump(by_alias=True)
+        for (entry,) in result["items"]
+    ]
+    return result
 
 
 @router.post("/vocabularies/{vocab_type}/entries", response_model=VocabularyEntryResponse, status_code=201)

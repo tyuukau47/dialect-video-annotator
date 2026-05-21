@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { Panel } from "@/components/panel";
+import { PaginationControls } from "@/components/pagination-controls";
 import { api } from "@/lib/api";
 import { formatDuration } from "@/lib/time";
 
@@ -14,8 +15,15 @@ export default function VideosPage() {
   const [search, setSearch] = useState("");
   const [newUrl, setNewUrl] = useState("");
   const [banner, setBanner] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
-  const queryString = useMemo(() => (search ? `?q=${encodeURIComponent(search)}` : ""), [search]);
+  const queryString = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("pageSize", "10");
+    if (search) params.set("q", search);
+    return `?${params.toString()}`;
+  }, [page, search]);
   const videosQuery = useQuery({
     queryKey: ["videos", queryString],
     queryFn: () => api.listVideos(queryString),
@@ -26,6 +34,7 @@ export default function VideosPage() {
     onSuccess: async () => {
       setNewUrl("");
       setBanner("Video added.");
+      setPage(1);
       await queryClient.invalidateQueries({ queryKey: ["videos"] });
     },
     onError: (error: Error) => setBanner(error.message),
@@ -63,7 +72,14 @@ export default function VideosPage() {
 
       <Panel title="Video Library" subtitle="Delete is blocked while active ranges still reference a video.">
         <div className="mb-4">
-          <input placeholder="Search by URL or video ID" value={search} onChange={(event) => setSearch(event.target.value)} />
+          <input
+            placeholder="Search by URL or video ID"
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPage(1);
+            }}
+          />
         </div>
         <div className="overflow-hidden rounded-2xl border border-line">
           <table>
@@ -115,6 +131,15 @@ export default function VideosPage() {
             </tbody>
           </table>
         </div>
+        {videosQuery.data ? (
+          <PaginationControls
+            page={videosQuery.data.page}
+            pageSize={videosQuery.data.page_size}
+            totalItems={videosQuery.data.total_items}
+            totalPages={videosQuery.data.total_pages}
+            onPageChange={setPage}
+          />
+        ) : null}
       </Panel>
     </div>
   );

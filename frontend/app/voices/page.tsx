@@ -4,20 +4,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Panel } from "@/components/panel";
+import { PaginationControls } from "@/components/pagination-controls";
 import { RangeEditor } from "@/components/range-editor";
 import { YouTubePlayer, type YouTubePlayerHandle } from "@/components/youtube-player";
 import { api } from "@/lib/api";
 import { formatDuration } from "@/lib/time";
 import type { AnnotationRange } from "@/lib/types";
-
-
-type VoiceVideoSummary = {
-  videoId: string;
-  youtubeVideoId: string;
-  sourceUrl: string;
-  rangeCount: number;
-  totalDurationMs: number;
-};
 
 
 export default function VoicesPage() {
@@ -30,10 +22,13 @@ export default function VoicesPage() {
   const [currentTimeMs, setCurrentTimeMs] = useState(0);
   const [editingRangeId, setEditingRangeId] = useState<string | null>(null);
   const [playingRange, setPlayingRange] = useState<{ rangeId: string; endMs: number } | null>(null);
+  const [voicesPage, setVoicesPage] = useState(1);
+  const [voiceVideosPage, setVoiceVideosPage] = useState(1);
+  const [voiceRangesPage, setVoiceRangesPage] = useState(1);
 
   const voicesQuery = useQuery({
-    queryKey: ["voices", "all"],
-    queryFn: () => api.listVoices("?includeArchived=true"),
+    queryKey: ["voices", "all", voicesPage],
+    queryFn: () => api.listVoices(`?includeArchived=true&page=${voicesPage}&pageSize=8`),
   });
   const gendersQuery = useQuery({
     queryKey: ["vocabulary", "gender"],
@@ -43,56 +38,49 @@ export default function VoicesPage() {
     queryKey: ["vocabulary", "emotion"],
     queryFn: () => api.listVocabulary("emotion"),
   });
+  const selectedVoiceQuery = useQuery({
+    queryKey: ["voice", selectedId],
+    queryFn: () => api.getVoice(selectedId!),
+    enabled: Boolean(selectedId),
+  });
+  const voiceVideosQuery = useQuery({
+    queryKey: ["voice-videos", selectedId, voiceVideosPage],
+    queryFn: () => api.getVoiceVideos(selectedId!, `?page=${voiceVideosPage}&pageSize=6`),
+    enabled: Boolean(selectedId),
+  });
   const voiceRangesQuery = useQuery({
-    queryKey: ["voice-ranges", selectedId],
-    queryFn: () => api.getVoiceRanges(selectedId!),
+    queryKey: ["voice-ranges", selectedId, selectedVideoId, voiceRangesPage],
+    queryFn: () =>
+      api.getVoiceRanges(
+        selectedId!,
+        `?page=${voiceRangesPage}&pageSize=8${selectedVideoId ? `&videoId=${encodeURIComponent(selectedVideoId)}` : ""}`,
+      ),
     enabled: Boolean(selectedId),
   });
 
-  const selectedVoice = useMemo(
-    () => voicesQuery.data?.items.find((voice) => voice.id === selectedId) || null,
-    [selectedId, voicesQuery.data?.items],
-  );
-
-  const voiceVideos = useMemo<VoiceVideoSummary[]>(() => {
-    const byVideo = new Map<string, VoiceVideoSummary>();
-    for (const range of voiceRangesQuery.data?.items || []) {
-      const current = byVideo.get(range.video_id);
-      if (current) {
-        current.rangeCount += 1;
-        current.totalDurationMs += range.duration_ms;
-      } else {
-        byVideo.set(range.video_id, {
-          videoId: range.video_id,
-          youtubeVideoId: range.youtube_video_id,
-          sourceUrl: range.source_url,
-          rangeCount: 1,
-          totalDurationMs: range.duration_ms,
-        });
-      }
-    }
-    return Array.from(byVideo.values());
-  }, [voiceRangesQuery.data?.items]);
+  const selectedVoice = selectedVoiceQuery.data || null;
+  const voiceVideos = voiceVideosQuery.data?.items || [];
 
   const selectedVideo = useMemo(
-    () => voiceVideos.find((video) => video.videoId === selectedVideoId) || null,
+    () => voiceVideos.find((video) => video.id === selectedVideoId) || null,
     [selectedVideoId, voiceVideos],
   );
 
-  const filteredRanges = useMemo(
-    () => (voiceRangesQuery.data?.items || []).filter((range) => !selectedVideoId || range.video_id === selectedVideoId),
-    [selectedVideoId, voiceRangesQuery.data?.items],
-  );
+  const filteredRanges = voiceRangesQuery.data?.items || [];
 
   useEffect(() => {
     if (!voiceVideos.length) {
       setSelectedVideoId(null);
       return;
     }
-    if (!selectedVideoId || !voiceVideos.some((video) => video.videoId === selectedVideoId)) {
-      setSelectedVideoId(voiceVideos[0].videoId);
+    if (!selectedVideoId || !voiceVideos.some((video) => video.id === selectedVideoId)) {
+      setSelectedVideoId(voiceVideos[0].id);
     }
   }, [selectedVideoId, voiceVideos]);
+
+  useEffect(() => {
+    setVoiceRangesPage(1);
+  }, [selectedVideoId]);
 
   useEffect(() => {
     if (!playingRange) return;
@@ -113,6 +101,7 @@ export default function VoicesPage() {
       setSelectedId(voice.id);
       setBanner("Voice saved.");
       await queryClient.invalidateQueries({ queryKey: ["voices"] });
+      await queryClient.invalidateQueries({ queryKey: ["voice", voice.id] });
     },
     onError: (error: Error) => setBanner(error.message),
   });
@@ -126,6 +115,7 @@ export default function VoicesPage() {
       setBanner("Voice deleted.");
       await queryClient.invalidateQueries({ queryKey: ["voices"] });
       await queryClient.invalidateQueries({ queryKey: ["voice-ranges"] });
+      await queryClient.invalidateQueries({ queryKey: ["voice-videos"] });
     },
     onError: (error: Error) => setBanner(error.message),
   });
@@ -137,6 +127,7 @@ export default function VoicesPage() {
       setBanner("Range updated.");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["voice-ranges", selectedId] }),
+        queryClient.invalidateQueries({ queryKey: ["voice-videos", selectedId] }),
         queryClient.invalidateQueries({ queryKey: ["voices"] }),
         queryClient.invalidateQueries({ queryKey: ["video-ranges"] }),
         queryClient.invalidateQueries({ queryKey: ["videos"] }),
@@ -152,6 +143,7 @@ export default function VoicesPage() {
       setBanner("Range deleted.");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["voice-ranges", selectedId] }),
+        queryClient.invalidateQueries({ queryKey: ["voice-videos", selectedId] }),
         queryClient.invalidateQueries({ queryKey: ["voices"] }),
         queryClient.invalidateQueries({ queryKey: ["video-ranges"] }),
         queryClient.invalidateQueries({ queryKey: ["videos"] }),
@@ -167,6 +159,8 @@ export default function VoicesPage() {
     setSelectedVideoId(null);
     setEditingRangeId(null);
     setPlayingRange(null);
+    setVoiceVideosPage(1);
+    setVoiceRangesPage(1);
     setForm({
       name: voice.name,
       language: voice.language,
@@ -177,7 +171,7 @@ export default function VoicesPage() {
   }
 
   function playRange(range: AnnotationRange) {
-    if (selectedVideo?.youtubeVideoId !== range.youtube_video_id) {
+    if (selectedVideo?.youtube_video_id !== range.youtube_video_id) {
       setSelectedVideoId(range.video_id);
       window.setTimeout(() => {
         playerRef.current?.seekToMs(range.start_ms);
@@ -201,6 +195,7 @@ export default function VoicesPage() {
               setSelectedId(null);
               setSelectedVideoId(null);
               setEditingRangeId(null);
+              setVoicesPage(1);
               setForm({ name: "", language: "", dialect: "", genderVocabId: "", archived: false });
             }}
             type="button"
@@ -224,6 +219,15 @@ export default function VoicesPage() {
             </button>
           ))}
         </div>
+        {voicesQuery.data ? (
+          <PaginationControls
+            page={voicesQuery.data.page}
+            pageSize={voicesQuery.data.page_size}
+            totalItems={voicesQuery.data.total_items}
+            totalPages={voicesQuery.data.total_pages}
+            onPageChange={setVoicesPage}
+          />
+        ) : null}
       </Panel>
 
       <div className="space-y-6">
@@ -283,18 +287,18 @@ export default function VoicesPage() {
                   {voiceVideos.length ? (
                     voiceVideos.map((video) => (
                       <button
-                        key={video.videoId}
-                        className={`w-full rounded-2xl border p-3 text-left ${selectedVideoId === video.videoId ? "border-accent bg-mist" : "border-line bg-white"}`}
+                        key={video.id}
+                        className={`w-full rounded-2xl border p-3 text-left ${selectedVideoId === video.id ? "border-accent bg-mist" : "border-line bg-white"}`}
                         onClick={() => {
-                          setSelectedVideoId(video.videoId);
+                          setSelectedVideoId(video.id);
                           setPlayingRange(null);
                         }}
                         type="button"
                       >
-                        <div className="font-mono text-xs text-slate-500">{video.youtubeVideoId}</div>
-                        <div className="mt-2 line-clamp-2 text-sm text-ink">{video.sourceUrl}</div>
+                        <div className="font-mono text-xs text-slate-500">{video.youtube_video_id}</div>
+                        <div className="mt-2 line-clamp-2 text-sm text-ink">{video.source_url}</div>
                         <div className="mt-2 text-xs uppercase tracking-[0.12em] text-slate-400">
-                          {video.rangeCount} ranges • {formatDuration(video.totalDurationMs)}
+                          {video.range_count} ranges • {formatDuration(video.total_duration_ms)}
                         </div>
                       </button>
                     ))
@@ -304,6 +308,15 @@ export default function VoicesPage() {
                     </div>
                   )}
                 </div>
+                {voiceVideosQuery.data ? (
+                  <PaginationControls
+                    page={voiceVideosQuery.data.page}
+                    pageSize={voiceVideosQuery.data.page_size}
+                    totalItems={voiceVideosQuery.data.total_items}
+                    totalPages={voiceVideosQuery.data.total_pages}
+                    onPageChange={setVoiceVideosPage}
+                  />
+                ) : null}
               </Panel>
 
               <Panel title="Playback" subtitle="Review one source video at a time while keeping the selected voice in context.">
@@ -311,7 +324,7 @@ export default function VoicesPage() {
                   currentTimeMs={currentTimeMs}
                   onCurrentTimeChange={setCurrentTimeMs}
                   playerRef={playerRef}
-                  videoId={selectedVideo?.youtubeVideoId ?? null}
+                  videoId={selectedVideo?.youtube_video_id ?? null}
                 />
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-mist px-4 py-3">
                   <div>
@@ -335,7 +348,7 @@ export default function VoicesPage() {
                     {selectedVideo ? (
                       <a
                         className="rounded-xl border border-line bg-white px-4 py-2 text-sm font-medium"
-                        href={selectedVideo.sourceUrl}
+                        href={selectedVideo.source_url}
                         rel="noreferrer"
                         target="_blank"
                       >
@@ -349,7 +362,9 @@ export default function VoicesPage() {
 
             <Panel title="Extracts For Voice" subtitle="Ranges are filtered to the selected video and can be played, edited, or deleted.">
               <div className="mb-4 text-sm text-slate-500">
-                {selectedVideo ? `${filteredRanges.length} ranges in selected video` : "Select a video to review extracts"}
+                {selectedVideo
+                  ? `${voiceRangesQuery.data?.total_items ?? filteredRanges.length} ranges in selected video`
+                  : "Select a video to review extracts"}
               </div>
               <div className="space-y-3">
                 {filteredRanges.map((range) =>
@@ -385,6 +400,15 @@ export default function VoicesPage() {
                   </div>
                 ) : null}
               </div>
+              {voiceRangesQuery.data ? (
+                <PaginationControls
+                  page={voiceRangesQuery.data.page}
+                  pageSize={voiceRangesQuery.data.page_size}
+                  totalItems={voiceRangesQuery.data.total_items}
+                  totalPages={voiceRangesQuery.data.total_pages}
+                  onPageChange={setVoiceRangesPage}
+                />
+              ) : null}
             </Panel>
           </>
         ) : null}

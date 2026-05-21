@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState, useRef } from "react";
 
 import { Panel } from "@/components/panel";
+import { PaginationControls } from "@/components/pagination-controls";
 import { RangeEditor } from "@/components/range-editor";
 import { YouTubePlayer, type YouTubePlayerHandle } from "@/components/youtube-player";
 import { api } from "@/lib/api";
@@ -24,10 +25,12 @@ export function AnnotationWorkspace({ initialLoadedVideo }: { initialLoadedVideo
   const [draftOpen, setDraftOpen] = useState(false);
   const [editingRangeId, setEditingRangeId] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
+  const [voicesPage, setVoicesPage] = useState(1);
+  const [rangesPage, setRangesPage] = useState(1);
 
   const voicesQuery = useQuery({
-    queryKey: ["voices"],
-    queryFn: () => api.listVoices("?includeArchived=false"),
+    queryKey: ["voices", "annotation-sidebar", voicesPage],
+    queryFn: () => api.listVoices(`?includeArchived=false&page=${voicesPage}&pageSize=8`),
   });
 
   const emotionsQuery = useQuery({
@@ -36,8 +39,8 @@ export function AnnotationWorkspace({ initialLoadedVideo }: { initialLoadedVideo
   });
 
   const rangesQuery = useQuery({
-    queryKey: ["video-ranges", loadedVideo?.id],
-    queryFn: () => api.getVideoRanges(loadedVideo!.id),
+    queryKey: ["video-ranges", loadedVideo?.id, rangesPage],
+    queryFn: () => api.getVideoRanges(loadedVideo!.id, `?page=${rangesPage}&pageSize=10`),
     enabled: Boolean(loadedVideo?.id),
   });
 
@@ -52,6 +55,7 @@ export function AnnotationWorkspace({ initialLoadedVideo }: { initialLoadedVideo
       setBanner(null);
       setDraftOpen(false);
       setEditingRangeId(null);
+      setRangesPage(1);
     },
     onError: (error: Error) => setBanner(error.message),
   });
@@ -116,6 +120,15 @@ export function AnnotationWorkspace({ initialLoadedVideo }: { initialLoadedVideo
               </Link>
             </div>
           </div>
+          {voicesQuery.data ? (
+            <PaginationControls
+              page={voicesQuery.data.page}
+              pageSize={voicesQuery.data.page_size}
+              totalItems={voicesQuery.data.total_items}
+              totalPages={voicesQuery.data.total_pages}
+              onPageChange={setVoicesPage}
+            />
+          ) : null}
         </Panel>
       </aside>
 
@@ -175,7 +188,9 @@ export function AnnotationWorkspace({ initialLoadedVideo }: { initialLoadedVideo
 
         <Panel title="Ranges" subtitle="Inline editing keeps the player visible while you work.">
           <div className="mb-4 flex items-center justify-between">
-            <div className="text-sm text-slate-500">{loadedVideo ? `${ranges.length} ranges for current video` : "Load a video to start annotating"}</div>
+            <div className="text-sm text-slate-500">
+              {loadedVideo ? `${rangesQuery.data?.total_items ?? ranges.length} ranges for current video` : "Load a video to start annotating"}
+            </div>
             <button
               className="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white"
               disabled={!loadedVideo || draftOpen}
@@ -220,6 +235,15 @@ export function AnnotationWorkspace({ initialLoadedVideo }: { initialLoadedVideo
               ),
             )}
           </div>
+          {rangesQuery.data ? (
+            <PaginationControls
+              page={rangesQuery.data.page}
+              pageSize={rangesQuery.data.page_size}
+              totalItems={rangesQuery.data.total_items}
+              totalPages={rangesQuery.data.total_pages}
+              onPageChange={setRangesPage}
+            />
+          ) : null}
         </Panel>
       </div>
     </div>

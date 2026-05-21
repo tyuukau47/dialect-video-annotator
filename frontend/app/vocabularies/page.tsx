@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
 import { Panel } from "@/components/panel";
+import { PaginationControls } from "@/components/pagination-controls";
 import { api } from "@/lib/api";
 import type { VocabularyEntry } from "@/lib/types";
 
@@ -18,15 +19,16 @@ export default function VocabulariesPage() {
   const [value, setValue] = useState("");
   const [isActive, setIsActive] = useState(true);
   const [banner, setBanner] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   const entriesQuery = useQuery({
-    queryKey: ["vocabulary", tab],
-    queryFn: () => api.listVocabulary(tab),
+    queryKey: ["vocabulary-page", tab, page],
+    queryFn: () => api.listVocabularyPage(tab, `?page=${page}&pageSize=8`),
   });
 
   const selectedEntry = useMemo(
-    () => entriesQuery.data?.find((entry) => entry.id === selectedId) || null,
-    [entriesQuery.data, selectedId],
+    () => entriesQuery.data?.items.find((entry) => entry.id === selectedId) || null,
+    [entriesQuery.data?.items, selectedId],
   );
 
   const saveMutation = useMutation({
@@ -39,7 +41,10 @@ export default function VocabulariesPage() {
     onSuccess: async (entry) => {
       setSelectedId(entry.id);
       setBanner("Vocabulary saved.");
-      await queryClient.invalidateQueries({ queryKey: ["vocabulary", tab] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["vocabulary", tab] }),
+        queryClient.invalidateQueries({ queryKey: ["vocabulary-page", tab] }),
+      ]);
     },
     onError: (error: Error) => setBanner(error.message),
   });
@@ -51,7 +56,10 @@ export default function VocabulariesPage() {
       setValue("");
       setIsActive(true);
       setBanner("Vocabulary deleted.");
-      await queryClient.invalidateQueries({ queryKey: ["vocabulary", tab] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["vocabulary", tab] }),
+        queryClient.invalidateQueries({ queryKey: ["vocabulary-page", tab] }),
+      ]);
     },
     onError: (error: Error) => setBanner(error.message),
   });
@@ -75,6 +83,7 @@ export default function VocabulariesPage() {
                 setSelectedId(null);
                 setValue("");
                 setIsActive(true);
+                setPage(1);
               }}
               type="button"
             >
@@ -94,7 +103,7 @@ export default function VocabulariesPage() {
           New Entry
         </button>
         <div className="space-y-3">
-          {entriesQuery.data?.map((entry) => (
+          {entriesQuery.data?.items.map((entry) => (
             <button
               key={entry.id}
               className={`w-full rounded-2xl border p-3 text-left ${selectedId === entry.id ? "border-accent bg-mist" : "border-line bg-white"}`}
@@ -111,6 +120,15 @@ export default function VocabulariesPage() {
             </button>
           ))}
         </div>
+        {entriesQuery.data ? (
+          <PaginationControls
+            page={entriesQuery.data.page}
+            pageSize={entriesQuery.data.page_size}
+            totalItems={entriesQuery.data.total_items}
+            totalPages={entriesQuery.data.total_pages}
+            onPageChange={setPage}
+          />
+        ) : null}
       </Panel>
 
       <Panel title={selectedId ? "Edit Entry" : "Create Entry"} subtitle="Set entries inactive instead of deleting when they are already in use.">
@@ -153,4 +171,3 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     </label>
   );
 }
-
