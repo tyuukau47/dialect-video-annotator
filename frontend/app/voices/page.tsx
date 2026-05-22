@@ -381,6 +381,7 @@ export default function VoicesPage() {
                         await updateRangeMutation.mutateAsync({ rangeId: range.id, payload });
                       }}
                       range={range}
+                      videoId={range.video_id}
                       voices={voicesQuery.data?.items || []}
                     />
                   ) : (

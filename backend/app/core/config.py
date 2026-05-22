@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     default_page_size: int = 25
     max_page_size: int = 100
     seed_on_startup: bool = True
+    subtitle_root_dir: str | None = "/root/work/subtitles"
 
     model_config = SettingsConfigDict(
         env_file=".env",

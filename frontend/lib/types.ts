@@ -57,6 +57,17 @@ export type AnnotationRange = {
   youtube_video_id: string;
 };
 
+export type SubtitleSuggestion = {
+  youtube_video_id: string;
+  language_code: string;
+  source_type: string;
+  text: string;
+  matched_cue_count: number;
+  coverage: "none" | "partial" | "full";
+  range_start_ms: number;
+  range_end_ms: number;
+};
+
 export type VoiceStats = {
   voice_id: string;
   range_count: number;

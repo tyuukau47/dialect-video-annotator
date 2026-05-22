@@ -2,6 +2,7 @@ import type {
   AdminVoiceSummary,
   AnnotationRange,
   Paginated,
+  SubtitleSuggestion,
   VideoResolveResponse,
   VideoSummary,
   VocabularyEntry,
@@ -10,6 +11,16 @@ import type {
 } from "@/lib/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "/api";
+
+export class ApiError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
@@ -29,7 +40,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {
       // ignore
     }
-    throw new Error(message);
+    throw new ApiError(response.status, message);
   }
 
   if (response.status === 204) {
@@ -52,6 +63,12 @@ export const api = {
       method: "DELETE",
     }),
   getVideoRanges: (videoId: string, query = "") => request<Paginated<AnnotationRange>>(`/videos/${videoId}/ranges${query}`),
+  getVideoSubtitleSuggestion: (videoId: string, startMs: number, endMs: number, languageCode?: string) =>
+    request<SubtitleSuggestion>(
+      `/videos/${videoId}/subtitle-suggestion?startMs=${encodeURIComponent(startMs)}&endMs=${encodeURIComponent(endMs)}${
+        languageCode ? `&languageCode=${encodeURIComponent(languageCode)}` : ""
+      }`
+    ),
   createRange: (videoId: string, payload: Record<string, unknown>) =>
     request<AnnotationRange>(`/videos/${videoId}/ranges`, {
       method: "POST",

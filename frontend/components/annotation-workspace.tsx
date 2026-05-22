@@ -209,6 +209,7 @@ export function AnnotationWorkspace({ initialLoadedVideo }: { initialLoadedVideo
               onSave={async (payload) => {
                 await createMutation.mutateAsync(payload);
               }}
+              videoId={loadedVideo?.id ?? null}
               voices={voices}
             />
           ) : null}
@@ -228,6 +229,7 @@ export function AnnotationWorkspace({ initialLoadedVideo }: { initialLoadedVideo
                     await updateMutation.mutateAsync({ rangeId: range.id, payload });
                   }}
                   range={range}
+                  videoId={range.video_id}
                   voices={voices}
                 />
               ) : (

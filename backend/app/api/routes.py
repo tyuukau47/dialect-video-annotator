@@ -10,10 +10,12 @@ from app.models import AnnotationRange, Video, Voice, VocabularyEntry
 from app.schemas.common import MessageResponse
 from app.schemas.range import RangeCreate, RangeResponse, RangeUpdate
 from app.schemas.stats import VoiceStatsResponse
+from app.schemas.subtitle import SubtitleSuggestionResponse
 from app.schemas.video import VideoResolveRequest, VideoResolveResponse, VideoResponse, VideoSummaryResponse
 from app.schemas.vocabulary import VocabularyEntryCreate, VocabularyEntryResponse, VocabularyEntryUpdate
 from app.schemas.voice import VoiceCreate, VoiceResponse, VoiceUpdate
 from app.services.pagination import paginate
+from app.services.subtitles import get_subtitle_suggestion
 from app.services.youtube import extract_youtube_video_id
 
 
@@ -234,6 +236,33 @@ def get_voice_videos(
 @router.get("/videos/{video_id}", response_model=VideoResponse)
 def get_video(video_id: str, db: Session = Depends(get_db)):
     return _get_video_or_404(db, video_id)
+
+
+@router.get("/videos/{video_id}/subtitle-suggestion", response_model=SubtitleSuggestionResponse)
+def get_video_subtitle_suggestion(
+    video_id: str,
+    start_ms: int = Query(alias="startMs", ge=0),
+    end_ms: int = Query(alias="endMs", gt=0),
+    language_code: str | None = Query(default=None, alias="languageCode"),
+    db: Session = Depends(get_db),
+):
+    if end_ms <= start_ms:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "INVALID_RANGE", "message": "startMs must be less than endMs."},
+        )
+
+    video = _get_video_or_404(db, video_id)
+    suggestion = get_subtitle_suggestion(settings.subtitle_root_dir, video.youtube_video_id, start_ms, end_ms, language_code)
+    if suggestion is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": "SUBTITLE_NOT_FOUND",
+                "message": f"No subtitle file is available for YouTube video {video.youtube_video_id}.",
+            },
+        )
+    return SubtitleSuggestionResponse(**suggestion)
 
 
 @router.get("/videos/{video_id}/ranges", response_model=dict)
