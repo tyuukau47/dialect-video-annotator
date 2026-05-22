@@ -14,6 +14,9 @@ services:
     environment:
       DVA_DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/dialect_video_annotator
       DVA_CORS_ORIGINS: '["http://localhost","http://127.0.0.1"]'
+      DVA_SUBTITLE_ROOT_DIR: /root/work/subtitles
+    volumes:
+      - /root/work/subtitles:/root/work/subtitles:ro
     depends_on:
       - db
 
