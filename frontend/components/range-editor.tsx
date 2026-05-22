@@ -191,7 +191,7 @@ export function RangeEditor({
               <div className="font-medium">
                 YouTube auto subtitle suggestion
                 <span className="ml-2 text-xs font-normal uppercase tracking-[0.12em] text-emerald-700">
-                  {subtitleSuggestionQuery.data.coverage} coverage • {subtitleSuggestionQuery.data.matched_cue_count} cues
+                  {subtitleSuggestionQuery.data.coverage} coverage • {subtitleSuggestionQuery.data.matched_segment_count} segments
                 </span>
               </div>
               <div className="flex gap-2">

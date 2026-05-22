@@ -8,7 +8,7 @@ class SubtitleSuggestionResponse(BaseModel):
     language_code: str
     source_type: str
     text: str
-    matched_cue_count: int
+    matched_segment_count: int
     coverage: Literal["none", "partial", "full"]
     range_start_ms: int
     range_end_ms: int

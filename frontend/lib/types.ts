@@ -62,7 +62,7 @@ export type SubtitleSuggestion = {
   language_code: string;
   source_type: string;
   text: string;
-  matched_cue_count: number;
+  matched_segment_count: number;
   coverage: "none" | "partial" | "full";
   range_start_ms: number;
   range_end_ms: number;

@@ -13,7 +13,7 @@ _NON_SPEECH_RE = re.compile(r"^\[[^\]]+\]$")
 
 
 @dataclass(frozen=True)
-class SubtitleCue:
+class SubtitleSegment:
     position: int
     start_ms: int
     end_ms: int
@@ -26,7 +26,7 @@ class SubtitleTrack:
     language_code: str
     source_type: str
     original_filename: str
-    cues: tuple[SubtitleCue, ...]
+    segments: tuple[SubtitleSegment, ...]
 
 
 def get_subtitle_suggestion(
@@ -40,13 +40,13 @@ def get_subtitle_suggestion(
     if track is None:
         return None
 
-    cues = [cue for cue in track.cues if cue.start_ms < end_ms and cue.end_ms > start_ms]
-    text = " ".join(cue.text for cue in cues).strip()
+    segments = [segment for segment in track.segments if segment.start_ms < end_ms and segment.end_ms > start_ms]
+    text = " ".join(segment.text for segment in segments).strip()
     if not text:
         coverage = "none"
     else:
-        coverage_start = min(cue.start_ms for cue in cues)
-        coverage_end = max(cue.end_ms for cue in cues)
+        coverage_start = min(segment.start_ms for segment in segments)
+        coverage_end = max(segment.end_ms for segment in segments)
         coverage = "full" if coverage_start <= start_ms and coverage_end >= end_ms else "partial"
 
     return {
@@ -54,7 +54,7 @@ def get_subtitle_suggestion(
         "language_code": track.language_code,
         "source_type": track.source_type,
         "text": text,
-        "matched_cue_count": len(cues),
+        "matched_segment_count": len(segments),
         "coverage": coverage,
         "range_start_ms": start_ms,
         "range_end_ms": end_ms,
@@ -94,7 +94,7 @@ def parse_json3_subtitle_file(path: str | Path, source_type: str = "youtube_auto
     if not isinstance(events, list):
         raise ValueError(f"Subtitle file is missing an events array: {file_path.name}")
 
-    cues: list[SubtitleCue] = []
+    segments: list[SubtitleSegment] = []
     for index, event in enumerate(events):
         if not isinstance(event, dict):
             continue
@@ -102,33 +102,41 @@ def parse_json3_subtitle_file(path: str | Path, source_type: str = "youtube_auto
         if not isinstance(segs, list):
             continue
 
-        raw_text = "".join(seg.get("utf8", "") for seg in segs if isinstance(seg, dict))
-        text = _WHITESPACE_RE.sub(" ", raw_text.replace("\n", " ")).strip()
-        if not text or _NON_SPEECH_RE.fullmatch(text):
-            continue
-
         start_ms = int(event.get("tStartMs", 0))
         duration_ms = event.get("dDurationMs")
         if duration_ms is None:
             next_start_ms = _find_next_start_ms(events, index)
             duration_ms = max(next_start_ms - start_ms, 0) if next_start_ms is not None else 0
+        cue_end_ms = max(start_ms + int(duration_ms), start_ms + 1)
 
-        end_ms = max(start_ms + int(duration_ms), start_ms + 1)
-        cues.append(
-            SubtitleCue(
-                position=len(cues),
-                start_ms=start_ms,
-                end_ms=end_ms,
-                text=text,
+        normalized_segments = _normalize_segments(segs)
+        if not normalized_segments:
+            continue
+
+        for segment_index, segment in enumerate(normalized_segments):
+            segment_start_ms = start_ms + int(segment["offset_ms"])
+            next_offset_ms = (
+                int(normalized_segments[segment_index + 1]["offset_ms"])
+                if segment_index + 1 < len(normalized_segments)
+                else cue_end_ms - start_ms
             )
-        )
+            segment_end_ms = max(start_ms + next_offset_ms, segment_start_ms + 1)
+            segment_end_ms = min(segment_end_ms, cue_end_ms)
+            segments.append(
+                SubtitleSegment(
+                    position=len(segments),
+                    start_ms=segment_start_ms,
+                    end_ms=segment_end_ms,
+                    text=segment["text"],
+                )
+            )
 
     return SubtitleTrack(
         youtube_video_id=match.group("youtube_video_id"),
         language_code=match.group("language_code"),
         source_type=source_type,
         original_filename=file_path.name,
-        cues=tuple(cues),
+        segments=tuple(segments),
     )
 
 
@@ -161,3 +169,21 @@ def _find_next_start_ms(events: list[dict], current_index: int) -> int | None:
             continue
         return int(next_start_ms)
     return None
+
+
+def _normalize_segments(segs: list[dict]) -> list[dict[str, int | str]]:
+    normalized_segments: list[dict[str, int | str]] = []
+    for seg in segs:
+        if not isinstance(seg, dict):
+            continue
+        raw_text = str(seg.get("utf8", ""))
+        text = _WHITESPACE_RE.sub(" ", raw_text.replace("\n", " ")).strip()
+        if not text or _NON_SPEECH_RE.fullmatch(text):
+            continue
+        normalized_segments.append(
+            {
+                "offset_ms": int(seg.get("tOffsetMs", 0)),
+                "text": text,
+            }
+        )
+    return normalized_segments
